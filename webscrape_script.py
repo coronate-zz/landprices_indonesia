@@ -1,61 +1,66 @@
-
+import pandas as pd
 from selenium import webdriver
 import time
 from bs4 import BeautifulSoup
 import re
-from urllib.request import urlopen
+import pdb
+from datetime import date
 
 
-url = "https://www.olx.co.id/jambi_g2000008/tanah_c4827"
-driver = webdriver.Chrome(
-    "/home/alejandrocoronado/Dropbox/Github/landprices_indonesia/Drivers/chromedriver_78")
-driver.get(url)
-time.sleep(10)
-
-
-def click_loadmore_btn():
-    """
-    Clicks on olx "MUAT "
-    """
-    loadmore_btn = driver.find_element_by_xpath(
-        '//*[@class="rui-3sH3b rui-23TLR rui-1zK8h"]')
-    loadmore_btn.click()
+def click_loadmore_btn(driver):
+  """
+  Clicks on olx "MUAT "
+  """
+  loadmore_btn = driver.find_element_by_xpath(
+      '//*[@class="rui-3sH3b rui-23TLR rui-1zK8h"]')
+  loadmore_btn.click()
 
 #<button type = "button" data - aut - id = "btnLoadMore" "> <span > muat lainnya < /span > < / button >
 
 
-def load_all_content(name_file):
-    """ This function press the load more btn until all content has been shown on the browser
-    Then the function saves the information in a html file with name_file name
-    """
-    cont = 0
-    while True:
-        try:
-            print("Loading: {}".format(cont))
-            click_loadmore_btn()
-            time.sleep(2)
-            cont += 1
-        except Exception as e:
-            print(e)
-            break
+def load_all_content(url, name_file, sleep_t1=10, sleep_t2=2):
+  """ This function press the load more btn until all content has been shown on the browser
+  Then the function saves the information in a html file with name_file name
+  """
+  driver = webdriver.Chrome(
+      "/home/alejandrocoronado/Dropbox/Github/landprices_indonesia/Drivers/chromedriver_78")
+  driver.get(url)
+  time.sleep(sleep_t1)
 
-    # Sabe HTML content
-    content = driver.page_source
-    with open(name_file, 'w') as f:
-        f.write(content)
+  cont = 0
+  while True:
+    try:
+      print("Loading: {}".format(cont))
+      click_loadmore_btn(driver)
+      time.sleep(sleep_t2)
+      cont += 1
+    except Exception as e:
+      print(e)
+      break
+
+  # Sabe HTML content
+  content = driver.page_source
+  with open(name_file, 'w') as f:
+    f.write(content)
 
 # load_all_content("htmls/olx.html")
 
 
-html_url = open(
-    "/home/alejandrocoronado/Dropbox/Github/landprices_indonesia/htmls/olx.html")
-#html_url = urlopen("https://www.kickstarter.com/projects/lynnemthomas/uncanny-magazine-year-6-raise-the-roof-raise-the-rates?ref=section-homepage-view-more-discovery-p1")
-bsObj = BeautifulSoup(html_url)
-land_offers = bsObj.findAll("li", {"data-aut-id": re.compile("itemBox")})
-offer_cont = 0
-df_offers = pd.DataFrame()
+def scrape_olx(html_path, url):
+  """ This function perform all the require actions to scrape a olx url calling
+      load_all_content function for  pressing the load more button and then perform webscrapping
+      on all the pages following the olx html format.
+  """
 
-for element in land_offers:
+  html_file = open(html_path)
+  bsObj = BeautifulSoup(html_file)
+  land_offers = bsObj.findAll("li", {"data-aut-id": re.compile("itemBox")})
+  area = bsObj.findAll("input", {"class": re.compile("_1jABB")})[0]["value"]
+
+  offer_cont = 0
+  df_offers = pd.DataFrame()
+
+  for element in land_offers:
     pandas_row = dict()
 
     element_location = element.findAll(
@@ -67,23 +72,32 @@ for element in land_offers:
     element_date = element.findAll(
         "span", {"class": re.compile("zLvFQ")})[0].text
 
-    print("\n\nTEST: \n\telement_title {}\n\telement_location: {}\n\telement_price: {}\n\telement_date: {} ".format(
+    print("\n\Element in land_offers: \n\telement_title {}\n\telement_location: {}\n\telement_price: {}\n\telement_date: {} ".format(
         element_title, element_location, element_price, element_date))
+
+    today_date = date.today()
+    today_date = today_date.strftime("%d/%m/%Y")
 
     pandas_row["title"] = element_title
     pandas_row["price"] = element_price
     pandas_row["location"] = element_location
     pandas_row["date"] = element_date
+    pandas_row["url"] = url
+    pandas_row["area"] = area
+    pandas_row["scrape_date"] = today_date
 
     pandas_row = pd.DataFrame(pandas_row, index=[offer_cont])
     offer_cont += 1
     # SAVE INFO with whole information of pledges (one observation per pledge per project)
     if len(df_offers) == 0:
-        df_offers = pandas_row
+      df_offers = pandas_row
     else:
-        df_offers = df_offers.append(pandas_row)
+      df_offers = df_offers.append(pandas_row)
+
+  return df_offers
 
 
+"""
 array(['13 Des', '12 Des', '11 Des', '10 Des', '09 Des', '16 Nov',
        '12 Sep', '7 hari yang lalu', '18 Des', 'Hari ini', 'Kemarin',
        '3 hari yang lalu', '4 hari yang lalu', '07 Des',
@@ -102,3 +116,4 @@ array(['13 Des', '12 Des', '11 Des', '10 Des', '09 Des', '16 Nov',
        '03 Okt', '02 Okt', '01 Okt', '30 Sep', '29 Sep', '28 Sep',
        '27 Sep', '26 Sep', '25 Sep', '07 Sep', '22 Jun', '24 Mei',
        '15 Sep', '13 Sep', '30 Agu', '03 Jul'], dtype=object)
+"""
